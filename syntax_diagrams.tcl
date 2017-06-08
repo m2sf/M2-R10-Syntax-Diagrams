@@ -384,14 +384,7 @@ lappend non_terminals recordType {
 
 # (15.1) Record Type To Extend
 lappend non_terminals recTypeToExtend {
-  or
-    {line typeIdent {optx [ defaultList ]}}
-    /NIL
-}
-
-# (15.2) Default List
-lappend non_terminals defaultList {
-  loop {line ident = constExpression} ;
+  or typeIdent /NIL
 }
 
 # (15.3) Field List
@@ -618,14 +611,14 @@ lappend non_terminals aliasDeclaration {
 lappend non_terminals namedAliasDecl {
   line aliasName {
     or
+      {line {loop {line , aliasName} nil} = qualifiedWildcard}
       {line = qualifiedName}
-      {line {loop , aliasName} = qualifiedWildcard}
     }
 }
 
 # (33.3) Alias Name
 lappend non_terminals aliasName {
-  line qualident
+  line ident
 }
 
 # (33.4) Qualified Name
@@ -1001,7 +994,7 @@ lappend non_terminals blueprint {
 
 # (56.1) Blueprint Identifier
 lappend non_terminals blueprintIdent {
-  line AlphaNumIdent
+  line Ident
 }
 
 # (56.2) Blueprint to Refine, Blueprint for Type to Extend
@@ -1023,7 +1016,7 @@ lappend non_terminals attributedClassification {
 
 # (57.2) Classification Identifier
 lappend non_terminals classificationIdent {
-  line ident 
+  line Ident 
 }
 
 # (58) Literal Compatibility
@@ -1038,7 +1031,7 @@ lappend non_terminals protoLiteral {
 
 # (58.2) Proto Literal Identifier
 lappend non_terminals protoLiteralIdent {
-  line ident 
+  line Ident 
 }
 
 # (59) Structured Proto Literal
@@ -1071,7 +1064,7 @@ lappend non_terminals wholeNumber {
 
 # (59.4) Builtin Or Referential Identifier
 lappend non_terminals builtinOrReferential {
-  line ident
+  line Ident
 }
 
 # (60) Constraint
@@ -1108,7 +1101,7 @@ lappend non_terminals termList {
 
 # (60.6) Classification Or Flag Identifier
 lappend non_terminals classificationOrFlagIdent {
-  line ident
+  line Ident
 }
 
 # (61) Requirement
@@ -1124,7 +1117,7 @@ lappend non_terminals condition {
 
 # (61.2) Boolean Constant Identifier
 lappend non_terminals boolConstIdent {
-  line ident
+  line Ident
 }
 
 # (61.3) Type Requirement
@@ -1158,7 +1151,7 @@ lappend non_terminals constExpression {
 
 # (62.3) Built-in Type Identifier
 lappend non_terminals builtinTypeIdent {
-  line ident
+  line Ident
 }
 
 # (62.4) Restricted Export
