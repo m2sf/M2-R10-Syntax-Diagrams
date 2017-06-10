@@ -171,13 +171,12 @@ lappend non_terminals definitionModule {
   stack
     {line DEFINITION MODULE moduleIdent}
     {line {optx [ blueprintToObey ]} {optx FOR typeToExtend} ;}
-    {line {loop nil {nil import ;}} {loop nil {nil definition nil}}
-      END moduleIdent .}
+    {line {loop nil import} {loop nil definition} END moduleIdent .}
 }
 
 # (2.1) Module Identifier, Blueprint Identifier, Type to Extend
 lappend non_terminals moduleIdent {
-  line Ident
+  line StdIdent
 }
 
 # (2.2) Blueprint to Obey
@@ -187,9 +186,11 @@ lappend non_terminals blueprintToObey {
 
 # (3) Import
 lappend non_terminals import {
-  or
-    {line IMPORT {loop impexLib ,}}
-    libGenDirective
+  line {
+    or
+      {line IMPORT {loop impexLib ,}}
+      libGenDirective
+    } ;
 }
 
 # (3.1) Import/Re-Export Library
@@ -210,12 +211,20 @@ lappend non_terminals libGenDirective {
 
 # (4) Library Generation Directive 2
 lappend non_terminals libGenDirective2 {
+  stack
+    {line GENLIB libIdent FROM template}
+    {line FOR {loop {line placeholder = replacement} ;} END}
+}
+
+
+# (4) Library Generation Directive 3
+lappend non_terminals libGenDirective3 {
   line GENLIB libIdent FROM template
   FOR {loop substitution ;} END
 }
 
-# (4) Library Generation Directive 3
-lappend non_terminals libGenDirective3 {
+# (4) Library Generation Directive 4
+lappend non_terminals libGenDirective4 {
   stack
     {line GENLIB libIdent FROM template}
     {line FOR {loop substitution ;} END}
@@ -228,7 +237,7 @@ lappend non_terminals substitution {
 
 # (4.2) Library Identifier, Template, Placeholder
 lappend non_terminals libIdent {
-  line Ident
+  line StdIdent
 }
 
 # (4.3) Replacement
@@ -236,14 +245,19 @@ lappend non_terminals replacement {
   or NumberLiteral StringLiteral ChevronText
 }
 
-# (5) Qualified Identifier
+# (5) Identifier
+lappend non_terminals ident {
+  or StdIdent ForeignIdent
+}
+
+# (5.1) Qualified Identifier
 lappend non_terminals qualident {
   loop ident .
 }
 
-# (5.1) Identifier
-lappend non_terminals ident {
-  or Ident ForeignIdent
+# (5.2) Identifier List
+lappend non_terminals identList {
+  loop ident ,
 }
 
 # (6) Definition
@@ -265,23 +279,30 @@ lappend non_terminals typeIdent {
 
 # (7) Constant Definition
 lappend non_terminals constDefinition {
-  line {or {line [ propertyToBindTo ]} restrictedExport nil}
-    ident {optx : typeIdent } = constExpression
+  line {optx constDefProlog}
+    ident = constExpression
 }
 
-# (7.1) Constant Expression
+# (7.1) Constant Definition Prolog
+lappend non_terminals constDefProlog {
+  or
+    {line [ propertyToBindTo ]}
+    restrictedExport
+}
+
+# (7.2) Constant Expression
 lappend non_terminals constExpression {
   line expression
 }
 
-# (7.2) Restricted Export
+# (7.3) Restricted Export
 lappend non_terminals restrictedExport {
   line *
 }
 
 # (8) Type Definition
 lappend non_terminals typeDefinition {
-  line {optx restrictedExport} ident = {or type OPAQUE}
+  line {optx restrictedExport} ident = {or OPAQUE type}
 }
 
 # (9) Identifier List
@@ -327,22 +348,32 @@ lappend non_terminals subrangeType {
   line range OF ordinalOrScalarType
 }
 
-# (11.1) Range
+# (11.1) Range Expression
 lappend non_terminals range {
-  line [ {optx greaterThan} constExpression .. {optx lessThan} constExpression ]
+  line [ lowerBound .. upperBound ]
 }
 
-# (11.2) Greater Than
+# (11.2) Lower Bound
+lappend non_terminals lowerBound {
+  line {optx greatherThan} constExpression
+}
+
+# (11.3) Greater Than
 lappend non_terminals greatherThan {
   line >
 }
 
-# (11.3) Less Than
+# (11.4) Upper Bound
+lappend non_terminals upperBound {
+  line {optx lessThan} constExpression
+}
+
+# (11.5) Less Than
 lappend non_terminals lessThan {
   line <
 }
 
-# (11.4) Ordinal Or Scalar Type
+# (11.6) Ordinal Or Scalar Type
 lappend non_terminals ordinalOrScalarType {
   line typeIdent
 }
@@ -443,7 +474,6 @@ lappend non_terminals addressTypeIdent {
   line {optx /UNSAFE .} /ADDRESS
 }
 
-
 # (20) Attributed Formal Type
 lappend non_terminals attributedFormalType {
   line {or CONST VAR} {or nonAttrFormalType simpleVariadicFormalType}
@@ -465,7 +495,7 @@ lappend non_terminals pointerTypeIdent {
 
 # (22) Simple Variadic Formal Type
 lappend non_terminals simpleVariadicFormalType {
-  line ARGLIST {optx reqNumOfArgs} OF nonAttrFormalType {optx terminator}
+  line ARGLIST {optx reqNumOfArgs} OF nonAttrFormalType
 }
 
 # (22.1) Required Number Of Arguments
@@ -473,47 +503,42 @@ lappend non_terminals reqNumOfArgs {
   line {optx greaterThan} constExpression
 }
 
-# (22.2) Argument List Terminator
-lappend non_terminals terminator {
-  line | constQualident
-}
-
-# (22.3) Constant Qualified Identifier
-lappend non_terminals constQualident {
-  line qualident
-}
-
 # (23) Variadic Formal Type
 lappend non_terminals variadicFormalType {
-  line ARGLIST {optx reqNumOfArgs} OF {
-    or
-      {line LBRACE {loop componentType ;} RBRACE}
-      nonAttrFormalType
-    }
-    {optx terminator}
+  line ARGLIST {optx reqNumOfArgs} OF variadicTypeDescriptor
 }
 
-# (23.1) Component Type
-lappend non_terminals componentType {
+# (23.1) Variadic Type Descriptor
+lappend non_terminals variadicTypeDescriptor {
+  or
+    {line LBRACE {loop variadicTypeComponent ,} RBRACE}
+    nonAttrFormalType
+}
+
+# (23.2) Variadic Type Component
+lappend non_terminals variadicTypeComponent {
   line {or CONST VAR nil} nonAttrFormalType
 }
 
 # (24) Procedure Header
 lappend non_terminals procedureHeader {
-  line PROCEDURE {
-    or
-      {line [ {or entityToBindTo /COROUTINE} ]}
-      restrictedExport nil
-    }
+  line PROCEDURE {optx procHeaderProlog}
   procedureSignature {optx defaultArg}
 }
 
-# (24.1) Default Argument
+# (24.1) Procedure Header Prolog
+lappend non_terminals procHeaderProlog {
+  or
+    {line [ {or entityToBindTo /COROUTINE} ]}
+    restrictedExport
+}
+
+# (24.2) Default Argument
 lappend non_terminals defaultArg {
   line [ ident = constExprOrConstArgFuncCall ]
 }
 
-# (24.2) Constant Expression Or Constant Argument Function Call
+# (24.3) Constant Expression Or Constant Argument Function Call
 lappend non_terminals constExprOrConstArgFuncCall {
   line expression
 }
@@ -533,7 +558,8 @@ lappend non_terminals formalParams {
 
 # (27) Attributed Formal Parameters
 lappend non_terminals attributedFormalParams {
-  line {or CONST VAR} identList : {or nonAttrFormalType simpleVariadicFormalType}
+  line {or CONST VAR}
+    identList : {or nonAttrFormalType simpleVariadicFormalType}
 }
 
 # (28) Allocating Formal Parameters
@@ -545,23 +571,51 @@ lappend non_terminals allocatingFormalParams {
     }
 }
 
-# (29) Variadic Formal Parameters
-#
-#  Due to layout constraints, postscript output needs to be edited:
-#  numOfArg => numOfArgs, terminato => terminator
-#
+# (29a) Variadic Formal Parameters (M2)
 lappend non_terminals variadicFormalParams {
-  line ARGLIST {optx reqNumOfArg} OF {
-    or
-      {line LBRACE {loop componentParam ;} RBRACE}
-      nonAttrFormalType
-    }
-    {optx terminator}
+  line ARGLIST {optx reqNumOfArgs} OF varArgDescriptor
 }
 
-# (29.1) Component Parameter
-lappend non_terminals componentParam {
+# (29a.1) Variadic Argument Descriptor
+lappend non_terminals varArgDescriptor {
+  or
+    {line LBRACE {loop varArgComponent ;} RBRACE}
+    nonAttrFormalType
+}
+
+# (29a.2) Variadic Argument Component
+lappend non_terminals varArgComponent {
   line {or CONST VAR nil} identList : nonAttrFormalType
+}
+
+# (29b) Variadic Formal Parameters (C-FFI)
+lappend non_terminals variadicFormalParamsCFFI {
+  line ARGLIST {
+    or
+      {line OF varArgDescriptor | terminator}
+      {line argcRef OF varArgDescriptor}
+      {line [ fmtStrRef ]}
+  }
+}
+
+# (29b.1) Argument List Terminator
+lappend non_terminals terminator {
+  line constQualident
+}
+
+# (29b.2) Constant Qualified Identifier
+lappend non_terminals constQualident {
+  line qualident
+}
+
+# (29b.3) Argument Count Reference
+lappend non_terminals argcRef {
+  line StdIdent
+}
+
+# (29b.4) Format String Reference
+lappend non_terminals fmtStrRef {
+  line StdIdent
 }
 
 
@@ -573,12 +627,12 @@ lappend non_terminals componentParam {
 lappend non_terminals implOrPrgmModule {
   stack
     {line {optx IMPLEMENTATION} MODULE moduleIdent ;}
-    {line {loop nil {nil privateImport ;}} block moduleIdent .}
+    {line {loop nil privateImport} block moduleIdent .}
 }
 
 # (31) Private Import
 lappend non_terminals privateImport {
-  line IMPORT {loop libIdent ,}
+  line IMPORT {loop libIdent ,} ;
 }
 
 # (32) Block
@@ -638,7 +692,7 @@ lappend non_terminals wildcardAliasDecl {
 
 # (34) Type Declaration
 lappend non_terminals typeDeclaration {
-  line ident = {or type indeterminateType}
+  line ident = {or indeterminateType type}
 }
 
 # (34.1) Indeterminate Type
@@ -658,13 +712,17 @@ lappend non_terminals discriminantFieldIdent {
 
 # (35) Variable or Field Declaration
 lappend non_terminals varOrFieldDeclaration {
-  line identList : {
-    or
-      {line {optx {optx BARE} ARRAY valueCount OF} typeIdent}
-      subrangeType
-      procedureType
-    }
+  line identList : {or typeIdent anonType}
 }
+
+# (35.1) Anonymous Type
+lappend non_terminals anonType {
+  or
+    {line {optx BARE} ARRAY valueCount OF typeIdent}
+    subrangeType
+    procedureType
+}
+
 # (36) Statement Sequence
 lappend non_terminals statementSequence {
   loop statement ;
@@ -695,20 +753,35 @@ lappend non_terminals emptyStatement {
 
 # 38) TO DO List
 lappend non_terminals toDoList {
-  line TO DO {optx ( trackingRef , weight )} {loop toDoTask ;} END
+  line TO DO {optx trackingRef} {loop taskToDo ;} END
 }
 
-# (38.1) TO DO Task
-lappend non_terminals toDoTask {
+# (38.1) Tracking Reference
+lappend non_terminals trackingRef {
+  line ( issueId , weight )
+}
+
+# (38.2) IssueId
+lappend non_terminals issueId {
+  line wholeNumber
+}
+
+# (38.3) Whole Number
+lappend non_terminals wholeNumber {
+  line NumberLiteral 
+}
+
+# (38.4) Task To Do
+lappend non_terminals taskToDo {
   line description {optx , estimatedHours}
 }
 
-# (38.2) Issue Tracking Reference, Description
+# (38.5) Description
 lappend non_terminals description {
   line StringLiteral
 }
 
-# (38.3) Weight, Estimated Hours
+# (38.6) Weight, Estimated Hours
 lappend non_terminals estimatedHours {
   line constExpression
 }
@@ -771,6 +844,13 @@ lappend non_terminals caseStatement {
     {loop {line | case} nil} {optx ELSE statementSequence} END
 }
 
+# (43) CASE Statement 2
+lappend non_terminals caseStatement2 {
+  stack
+    {line CASE expression OF {loop {line | case} nil}}
+    {line {optx ELSE statementSequence} END}
+}
+
 # (43.1) Case
 lappend non_terminals case {
   line {loop caseLabels ,} : statementSequence
@@ -801,6 +881,13 @@ lappend non_terminals forStatement {
   line FOR forLoopVariants IN iterableExpr DO statementSequence END
 }
 
+# (47) FOR Statement 2
+lappend non_terminals forStatement2 {
+  stack
+    {line FOR forLoopVariants IN iterableExpr}
+    {line DO statementSequence END}
+}
+
 # (47.1) FOR Loop Variants
 lappend non_terminals forLoopVariants {
   line accessor {optx ascOrDesc} {optx , value}
@@ -818,15 +905,27 @@ lappend non_terminals ascOrDesc {
 
 # (47.4) Iterable Expression
 lappend non_terminals iterableExpr {
-  or designator {line ordinalRange OF ordinalType}
+  or
+    {line ordinalRange OF ordinalType}
+    designator
 }
 
 # (47.5) Ordinal Range
 lappend non_terminals ordinalRange {
-  line [ expression .. expression ]
+  line [ firstValue .. lastValue ]
 }
 
-# (47.6) Ordinal Type
+# (47.6) First Value
+lappend non_terminals firstValue {
+  line expression
+}
+
+# (47.7) Last Value
+lappend non_terminals lastValue {
+  line expression
+}
+
+# (47.8) Ordinal Type
 lappend non_terminals ordinalType {
   line typeIdent
 }
@@ -921,7 +1020,12 @@ lappend non_terminals simpleTerm {
 
 # (53) Simple Term (with exponentiation)
 lappend non_terminals simpleTerm2 {
-  or {loop factor **} {line NOT factor}
+  or {loop factor expOp} {line NOT factor}
+}
+
+# (53.1) Exponentiation Operator
+lappend non_terminals expOp {
+  line **
 }
 
 # (54) Factor
@@ -994,7 +1098,7 @@ lappend non_terminals blueprint {
 
 # (56.1) Blueprint Identifier
 lappend non_terminals blueprintIdent {
-  line Ident
+  line StdIdent
 }
 
 # (56.2) Blueprint to Refine, Blueprint for Type to Extend
@@ -1016,7 +1120,7 @@ lappend non_terminals attributedClassification {
 
 # (57.2) Classification Identifier
 lappend non_terminals classificationIdent {
-  line Ident 
+  line StdIdent 
 }
 
 # (58) Literal Compatibility
@@ -1026,25 +1130,44 @@ lappend non_terminals literalCompatibility {
 
 # (58.1) Proto Literal
 lappend non_terminals protoLiteral {
-  or protoLiteralIdent structuredProtoLiteral 
+  or
+    simpleProtoLiteral
+    compoundProtoLiteral
 }
 
-# (58.2) Proto Literal Identifier
-lappend non_terminals protoLiteralIdent {
-  line Ident 
+# (58.2) Simple Proto Literal
+lappend non_terminals simpleProtoLiteral {
+  line StdIdent 
 }
 
-# (59) Structured Proto Literal
-lappend non_terminals structuredProtoLiteral {
+# (58.3) Compound Proto Literal
+lappend non_terminals compoundProtoLiteral {
   line LBRACE {
     or
-      {line ARGLIST {optx reqValueCount} OF {
-        or
-          {line LBRACE {loop builtinOrReferential ,} RBRACE}
-          builtinOrReferential}
-        }
-      {loop builtinOrReferential ,}
-  } RBRACE
+      literalComponentList
+      variadicProtoLiteral
+    }
+    RBRACE
+}
+
+# (58.4) Literal Component List
+lappend non_terminals literalComponentList {
+  loop literalComponent ,
+}
+
+# (58.5) Literal Component
+lappend non_terminals literalComponent {
+  line builtinOrReferentialIdent
+}
+
+# (58.6) Builtin Or Referential Identifier
+lappend non_terminals builtinOrReferentialIdent {
+  line StdIdent
+}
+
+# (59) Variadic Proto Literal
+lappend non_terminals variadicProtoLiteral {
+  line ARGLIST {optx reqValueCount} OF variadicLiteralDescriptor
 }
 
 # (59.1) Required Value Count
@@ -1052,19 +1175,11 @@ lappend non_terminals reqValueCount {
   line {optx greaterThan} wholeNumber
 }
 
-# (59.2) Greater Than
-lappend non_terminals greaterThan {
-  line > 
-}
-
-# (59.3) Whole Number
-lappend non_terminals wholeNumber {
-  line NumberLiteral 
-}
-
-# (59.4) Builtin Or Referential Identifier
-lappend non_terminals builtinOrReferential {
-  line Ident
+# (59.2) Variadic Literal Descriptor
+lappend non_terminals variadicLiteralDescriptor {
+  or 
+    {line LBRACE literalComponentList RBRACE}
+    literalComponent
 }
 
 # (60) Constraint
@@ -1101,13 +1216,13 @@ lappend non_terminals termList {
 
 # (60.6) Classification Or Flag Identifier
 lappend non_terminals classificationOrFlagIdent {
-  line Ident
+  line StdIdent
 }
 
 # (61) Requirement
 lappend non_terminals requirement {
   line {optx condition ->}
-  {or typeRequirement constRequirement procRequirement}
+  {or constRequirement typeRequirement procRequirement}
 }
 
 # (61.1) Condition
@@ -1117,12 +1232,7 @@ lappend non_terminals condition {
 
 # (61.2) Boolean Constant Identifier
 lappend non_terminals boolConstIdent {
-  line Ident
-}
-
-# (61.3) Type Requirement
-lappend non_terminals typeRequirement {
-  line TYPE typeDefinition 
+  line StdIdent
 }
 
 # (62) Constant Requirement
@@ -1135,7 +1245,27 @@ lappend non_terminals constRequirement {
     }
 }
 
-# (62.1) Simple Constant Requirement
+# (62.1) Property To Bind To
+lappend non_terminals propertyToBindTo {
+  or memMgtProperty collectionProperty scalarProperty /TFLAGS
+}
+
+# (62.2) Memory Management Property
+lappend non_terminals memMgtProperty {
+  or /TDYN /TREFC
+}
+
+# (62.3) Collection Property
+lappend non_terminals collectionProperty {
+  or /TORDERED /TSORTED /TLIMIT
+}
+
+# (62.4) Scalar Property
+lappend non_terminals scalarProperty {
+  or /TSCALAR /TMAX /TMIN
+}
+
+# (62.5) Simple Constant Requirement
 lappend non_terminals simpleConstRequirement {
   line ident {
     or
@@ -1144,39 +1274,14 @@ lappend non_terminals simpleConstRequirement {
     }
 }
 
-# (62.2) Constant Expression
-lappend non_terminals constExpression {
-  line expression
-}
-
-# (62.3) Built-in Type Identifier
+# (62.6) Built-in Type Identifier
 lappend non_terminals builtinTypeIdent {
-  line Ident
+  line StdIdent
 }
 
-# (62.4) Restricted Export
-lappend non_terminals restrictedExport {
-  line *
-}
-
-# (63) Property To Bind To
-lappend non_terminals propertyToBindTo {
-  or memMgtProperty collectionProperty scalarProperty /TFLAGS
-}
-
-# (63.1) Memory Management Property
-lappend non_terminals memMgtProperty {
-  or /TDYN /TREFC
-}
-
-# (63.2) Collection Property
-lappend non_terminals collectionProperty {
-  or /TORDERED /TSORTED /TLIMIT
-}
-
-# (63.3) Scalar Property
-lappend non_terminals scalarProperty {
-  or /TSCALAR /TMAX /TMIN
+# (63) Type Requirement
+lappend non_terminals typeRequirement {
+  line TYPE typeDefinition 
 }
 
 # (64) Procedure Requirement
@@ -1989,12 +2094,12 @@ lappend res_symbols CloseComment {
 }
 
 
-# ----------------------------
-# (4) Alpha-Numeric Identifier
-# ----------------------------
+# -----------------------
+# (4) Standard Identifier
+# -----------------------
 
-# (4) Alpha Numeric Identifier
-lappend terminals AlphaNumIdent {
+# (4) Standard Identifier
+lappend terminals StdIdent {
   line Letter {loop nil LetterOrDigit}
 }
 
@@ -2011,7 +2116,7 @@ lappend terminals LetterOrDigit {
 lappend terminals ForeignIdent {
   or
     {line $ {loop LetterOrDigit nil} {loop nil ForeignIdentTail}}
-    {line AlphaNumIdent {loop ForeignIdentTail nil}}
+    {line Ident {loop ForeignIdentTail nil}}
 }
 
 # (4.1) Foreign Identifier Tail
@@ -2205,7 +2310,7 @@ lappend ignore_symbols Whitespace {
 }
 
 # (1.1) ASCII_TAB
-# CONST ASCII_TAB = CHR(8);
+# CONST ASCII_TAB = CHR(9);
 
 # (2) Line Comment
 lappend ignore_symbols LineComment {
@@ -2223,21 +2328,43 @@ lappend ignore_symbols CommentCharacter {
   BACKSLASH SINGLE_QUOTE DOUBLE_QUOTE
 }
 
-# (4) End-Of-Line Marker
+# (5) End-Of-Line Marker
 lappend ignore_symbols EndOfLine {
   or
     {line ASCII_LF}
     {line ASCII_CR {optx ASCII_LF}}
 }
 
-# (4.1) ASCII_LF
+# (5.1) ASCII_LF
 # CONST ASCII_LF = CHR(10);
 
-# (4.2) ASCII_CR
+# (5.2) ASCII_CR
 # CONST ASCII_CR = CHR(13);
 
-# (5) UTF8 BOM
+# (6) UTF8 BOM
 # CONST UTF8_BOM = { 0uEF, 0uBB, 0uBF };
+
+
+# ---------------------------------------------------------------------------
+# Recommended Debugging Aid -- Not part of the language specification
+# ---------------------------------------------------------------------------
+#
+
+# (4) Disabled Code Section
+lappend ignore_symbols DisabledCodeSection {
+  line
+    StartOfLine ?<
+    {loop {or AnyPrintable Whitespace EndOfLine} nil}
+    EndOfLine >?
+}
+
+# (4.1) Start Of Line
+# not a symbol
+
+# (4.2) Any Printable Character
+lappend ignore_symbols AnyPrintable {
+  line 0u20..0u7E
+}
 
 # ---------------------------------------------------------------------------
 # Pragma Grammar
@@ -2431,7 +2558,7 @@ lappend pragmas implDefinedPragma {
 
 # (17.1) Implementation Prefix
 lappend pragmas implPrefix {
-  line Letter {loop LetterOrDigit nil}
+  line StdIdent
 }
 
 # (18) In-Pragma Expression
